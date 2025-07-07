@@ -79,11 +79,11 @@ the "Answer board" below:
 Answer board:
 
 ```
- - | - | - 
+ O | - | O 
  __|___|___
- - | - | - 
+ - | X | - 
  __|___|___
- - | - | - 
+ X | X | O 
 ```
 
 After you've answered look for a fellow fellow near you and discuss your answers!

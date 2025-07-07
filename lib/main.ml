@@ -29,9 +29,27 @@ let non_win =
       ({ row = 2; column = 0 }, O);
     ]
 
+let empty_board =
+  init_game
+    []
+
 let print_game (game : Game.t) =
-  ignore game;
-  print_endline ""
+  let board_width = Game_kind.board_length game.game_kind in
+  let board_contents =
+    List.init board_width ~f:(fun row ->
+        let row_contents =
+          List.init board_width ~f:(fun column ->
+              (match Map.find game.board { row; column } with
+              | Some Piece.O -> "O"
+              | Some Piece.X -> "X"
+              | None -> " ")
+              ^ if column < board_width - 1 then " | " else "")
+        in
+        List.fold row_contents ~init:"" ~f:(fun acc x -> acc ^ x))
+  in
+  List.iteri board_contents ~f:(fun i row ->
+      print_endline row;
+      if i < board_width - 1 then print_endline "---------")
 
 let%expect_test "print_win_for_x" =
   print_game win_for_x;
@@ -57,10 +75,29 @@ let%expect_test "print_non_win" =
       |}];
   return ()
 
+let%expect_test "print_empty_board" =
+  print_game empty_board;
+  [%expect
+    {|
+        |   |
+      ---------
+        |   |
+      ---------
+        |   |
+      |}];
+  return ()
+
 (* Exercise 1 *)
 let available_moves (game : Game.t) : Position.t list =
-  ignore game;
-  failwith "Implement me!"
+  let board_width = Game_kind.board_length game.game_kind in
+  let valid_positions = List.init board_width ~f:(fun row -> 
+    List.init board_width ~f:(fun column -> 
+      let position = {row; column} in
+              (match Map.find game.board position with
+              | Some -> position
+              | None -> " ")
+              ^ if column < board_width - 1 then " | " else "")) in
+  valid_positions
 
 (* Exercise 2 *)
 let evaluate (game : Game.t) : Evaluation.t =
