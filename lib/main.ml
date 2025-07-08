@@ -29,9 +29,7 @@ let non_win =
       ({ row = 2; column = 0 }, O);
     ]
 
-let empty_board =
-  init_game
-    []
+let empty_board = init_game []
 
 let print_game (game : Game.t) =
   let board_width = Game_kind.board_length game.game_kind in
@@ -90,14 +88,55 @@ let%expect_test "print_empty_board" =
 (* Exercise 1 *)
 let available_moves (game : Game.t) : Position.t list =
   let board_width = Game_kind.board_length game.game_kind in
-  let valid_positions = List.init board_width ~f:(fun row -> 
-    List.init board_width ~f:(fun column -> 
-      let position = {row; column} in
-              (match Map.find game.board position with
-              | Some -> position
-              | None -> " ")
-              ^ if column < board_width - 1 then " | " else "")) in
-  valid_positions
+  let valid_positions =
+    List.init board_width ~f:(fun row ->
+        let spots_in_row =
+          List.init board_width ~f:(fun column -> { Position.row; column })
+        in
+        List.fold spots_in_row ~init:[] ~f:(fun acc position ->
+            match Map.find game.board position with
+            | Some X | Some O -> acc
+            | None -> List.append acc [ position ]))
+  in
+  List.fold valid_positions ~init:[] ~f:(fun acc position ->
+      List.append acc position)
+
+let%expect_test "available_win_for_x" =
+  List.iter (available_moves win_for_x) ~f:(fun pos ->
+      print_endline (Position.to_string pos));
+  [%expect {|
+      |}];
+  return ()
+
+let%expect_test "available_non_win" =
+  List.iter (available_moves non_win) ~f:(fun pos ->
+      print_endline (Position.to_string pos));
+  [%expect
+    {|
+      ((row 0) (column 1))
+      ((row 0) (column 2))
+      ((row 1) (column 1))
+      ((row 1) (column 2))
+      ((row 2) (column 1))
+      |}];
+  return ()
+
+let%expect_test "available_empty_board" =
+  List.iter (available_moves empty_board) ~f:(fun pos ->
+      print_endline (Position.to_string pos));
+  [%expect
+    {|
+      ((row 0) (column 0))
+      ((row 0) (column 1))
+      ((row 0) (column 2))
+      ((row 1) (column 0))
+      ((row 1) (column 1))
+      ((row 1) (column 2))
+      ((row 2) (column 0))
+      ((row 2) (column 1))
+      ((row 2) (column 2))
+      |}];
+  return ()
 
 (* Exercise 2 *)
 let evaluate (game : Game.t) : Evaluation.t =
