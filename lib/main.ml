@@ -159,41 +159,32 @@ let evaluate (game : Game.t) : Evaluation.t =
   in
   if expected_placed_pieces < Map.length game.board then Evaluation.Illegal_move
   else
-    let winner : Piece.t option =
+    let winner =
       Map.fold game.board ~init:None
-        ~f:(fun ~key:pos ~data:initial_piece _acc ->
+        ~f:(fun ~key:initial_pos ~data:initial_piece win_found ->
           (*return piece.t if winner exists*)
-          let spots =
-            List.init
-              (Game_kind.win_length game.game_kind - 1)
-              ~f:(fun _int -> 0)
-          in
-          let check_dir direction =
-            let next_pos_in_dir =
-              List.folding_map spots ~init:pos ~f:(fun acc _x ->
-                  (*returns accumulator and list of positions*)
-                  let next_pos = direction acc in
-                  (next_pos, Map.find game.board next_pos))
-            in
-            List.for_all next_pos_in_dir ~f:(function
-              | Some piece ->
-                  if Piece.equal piece initial_piece then true else false
-              | None -> false)
-          in
-          let any_wins =
-            List.exists
-              [
-                Position.up;
-                Position.down;
-                Position.right;
-                Position.left;
-                Position.up_left;
-                Position.up_right;
-                Position.down_left;
-                Position.down_right;
-              ] ~f:(fun dir -> check_dir dir)
-          in
-          match any_wins with true -> Some initial_piece | false -> None)
+          match win_found with
+          | Some piece -> Some piece
+          | None ->
+              List.fold Position.all_offsets ~init:None
+                ~f:(fun win_found_in_dir dir ->
+                  match win_found_in_dir with
+                  | Some piece -> Some piece
+                  | None ->
+                    (* if bounds are within 5 pieces then return none *)
+                      let rec check_next input_pos n =
+                        if n = 0 then Some initial_piece
+                        else
+                          let cur_pos = dir input_pos in
+                          let cur_piece = Map.find game.board cur_pos in
+                          match cur_piece with
+                          | Some piece ->
+                              if Piece.equal piece initial_piece then
+                                check_next cur_pos (n - 1)
+                              else None
+                          | None -> None
+                      in
+                      check_next initial_pos ((Game_kind.win_length game.game_kind) - 1)))
     in
     match winner with
     | Some _piece -> Evaluation.Game_over { winner }
@@ -359,16 +350,15 @@ let available_moves_that_do_not_immediately_lose ~(me : Piece.t) (game : Game.t)
 let make_move ~(game : Game.t) ~(you_play : Piece.t) : Position.t =
   (* Exercise 7 *)
   let rec minimax ~(node : Game.t) ~(depth : int) ~(maximizingPlayer : bool) :
-      float =
+      int =
     match evaluate node with
     | Evaluation.Game_over { winner } -> (
         match winner with
         | Some piece ->
-            if Piece.equal piece you_play then Float.infinity
-            else Float.neg_infinity
-        | _ -> 0. (* tie *))
+            if Piece.equal piece you_play then Int.max_value else Int.min_value
+        | _ -> 0 (* tie *))
     | _ ->
-        if depth = 0 then 0.
+        if depth = 0 then 0
         else
           let possible_moves = available_moves node in
           if maximizingPlayer then
@@ -378,36 +368,30 @@ let make_move ~(game : Game.t) ~(you_play : Piece.t) : Position.t =
                     ~node:(test_move ~me:you_play ~game:node pos)
                     ~depth:(depth - 1) ~maximizingPlayer:false)
             in
-            Option.value_exn
-              (List.max_elt values ~compare:(fun x y -> Float.compare x y))
+            Option.value_exn (List.max_elt values ~compare:Int.compare)
           else (* minimizing player *)
             let values =
               List.map possible_moves ~f:(fun pos ->
                   minimax
-                    ~node:(test_move ~me:you_play ~game:node pos)
+                    ~node:(test_move ~me:(Piece.flip you_play) ~game:node pos)
                     ~depth:(depth - 1) ~maximizingPlayer:true)
             in
-            Option.value_exn
-              (List.min_elt values ~compare:(fun x y -> Float.compare x y))
+            Option.value_exn (List.min_elt values ~compare:Int.compare)
   in
-  let possible_moves = available_moves game in
-  let position =
-    Option.value_exn
-      (List.max_elt possible_moves ~compare:(fun x y ->
-           let x_val =
-             minimax
-               ~node:(test_move ~me:you_play ~game x)
-               ~depth:5 ~maximizingPlayer:true
-           in
-           let y_val =
-             minimax
-               ~node:(test_move ~me:you_play ~game y)
-               ~depth:5 ~maximizingPlayer:true
-           in
-           Float.compare x_val y_val))
-  in
-  print_endline (Piece.to_string you_play ^ Position.to_string position);
-  position
+  let possible_first_moves = available_moves game in
+  Option.value_exn
+    (List.max_elt possible_first_moves ~compare:(fun x y ->
+         let x_val =
+           minimax
+             ~node:(test_move ~me:you_play ~game x)
+             ~depth:2 ~maximizingPlayer:false
+         in
+         let y_val =
+           minimax
+             ~node:(test_move ~me:you_play ~game y)
+             ~depth:2 ~maximizingPlayer:false
+         in
+         Int.compare x_val y_val))
 
 let exercise_five =
   Command.async ~summary:"Exercise 5: Is there a non-losing move?"
@@ -419,6 +403,14 @@ let exercise_five =
        print_s [%sexp (losing_moves : Position.t list)];
        return ())
 
+let make_move_test =
+  Command.async ~summary:"Exercise 5: Is there a non-losing move?"
+    (let%map_open.Command () = return () in
+     fun () ->
+       let position = make_move ~you_play:O ~game:non_win in
+       print_s [%sexp (position : Position.t)];
+       return ())
+
 let command =
   Command.group ~summary:"Exercises"
     [
@@ -427,4 +419,5 @@ let command =
       ("three", exercise_three);
       ("four", exercise_four);
       ("five", exercise_five);
+      ("make-move", make_move_test);
     ]
